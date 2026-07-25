@@ -211,21 +211,76 @@ Dans les deux cas le service démarre, passe son health check, et les parcours e
 paiement sont morts. Correctif : `.url()` pour fermer le cas de la chaîne vide, et un
 `refine` qui fait échouer bruyamment un déploiement de production pointant sur localhost.
 
+### 10. Un utilisateur qui se désabonne une fois est enfermé dehors pour toujours
+
+**CERTAIN. Observé en conditions réelles pendant l'audit, pas déduit du code.**
+`backend/src/lib/mail.ts`
+
+Brevo tient une liste de blocage transactionnelle. Une adresse y entre dès que son
+propriétaire clique sur un lien de désabonnement, ou simplement sur le bouton « Se
+désabonner » que Gmail affiche en haut de chaque message. Un signalement en indésirable
+suffit parfois. Ensuite, Brevo **refuse tout envoi vers cette adresse**, y compris les
+emails transactionnels.
+
+Le piège n'est pas là : il est dans ce que notre code observe.
+
+```
+POST /api/auth/register 201        <- notre serveur : inscription réussie
+18:15:53  blocked                  <- Brevo, la même seconde : jamais envoyé
+```
+
+**Brevo répond succès à l'appel API puis bloque en interne.** `sendEmail` voit un `res.ok`
+et ne lève rien. Notre code est donc structurellement incapable de distinguer un email parti
+d'un email refusé.
+
+Conséquence pour un vrai utilisateur : après un seul clic sur « se désabonner », il ne peut
+plus jamais recevoir ni lien de vérification, ni réinitialisation de mot de passe. Son
+compte devient définitivement inaccessible, et personne n'est prévenu, ni lui, ni le
+support. Le seul symptôme visible est « je ne reçois pas le mail », sans aucun moyen de
+diagnostic depuis l'application.
+
+Constaté pendant cet audit : une adresse de test bloquée depuis dix jours, quatre tentatives
+d'inscription, quatre blocages instantanés, et quatre réponses `201` côté serveur. Une heure
+perdue à chercher du côté du spam et de la configuration de l'expéditeur avant d'interroger
+l'API de Brevo, qui a donné la réponse en une requête.
+
+Trois choses à faire, de la plus urgente à la plus structurante :
+
+1. **Retirer le lien de désabonnement des emails transactionnels.** Une vérification
+   d'adresse et une réinitialisation de mot de passe ne sont pas du marketing. Elles ne
+   devraient pas offrir ce choix, ni être soumises à cette liste.
+2. **Détecter le blocage avant de répondre 201.** L'API expose
+   `GET /v3/smtp/blockedContacts/{email}`. Un appel avant l'envoi, ou une vérification
+   après, permet de renvoyer un message utile plutôt qu'un faux succès.
+3. **Donner au support un moyen de voir et de lever un blocage**, sans quoi chaque cas
+   demandera un accès au tableau de bord Brevo.
+
+En attendant, la commande qui débloque une adresse, utile au support :
+
+```bash
+curl -s -X DELETE -H "api-key: $BREVO_API_KEY" \
+  https://api.brevo.com/v3/smtp/blockedContacts/adresse@exemple.fr -w "HTTP %{http_code}\n"
+```
+
+Un `204` signifie que c'est fait. À noter : dans l'interface Brevo, cette liste est rangée
+du côté transactionnel, et non avec les contacts blacklistés du marketing, ce qui la rend
+difficile à trouver quand on la cherche au mauvais endroit.
+
 ---
 
 ## À traiter ensuite
 
 | # | Sujet | Où | Confiance |
 |---|---|---|---|
-| 10 | Un manager voit l'email et le solde de tous les autres managers, alors qu'aucun écran manager n'en a besoin | `attribution.controller.ts:186`, garde trop large | CERTAIN |
-| 11 | Un manager voit le pool de tokens de l'entreprise, alors que son écran n'en affiche que le nom | `company.controller.ts:13` | CERTAIN |
-| 12 | Les migrations sont rejouées à chaque réveil du conteneur, et un hoquet de base empêche le démarrage au lieu de réessayer | `package.json:9`, `start:render` | PROBABLE |
-| 13 | Les jobs annoncés toutes les 24 h ne se déclenchent jamais : le processus meurt avant. Seule l'exécution au démarrage tourne, donc au pire moment, pendant le réveil | `jobs/*.ts`, `server.ts:41` | PROBABLE |
-| 14 | Après paiement, l'écran annonce le succès et recharge le solde au bout de 1,5 s, alors que le webhook peut réveiller un conteneur endormi pendant 30 à 60 s. Aucune route de rattrapage n'existe | `OwnerDashboard.tsx:114` | PROBABLE |
-| 15 | L'invariant comptable écrit dans le schéma est faux pour tout manager : sa rétribution crédite son solde sans créer de ligne au registre | `schema.prisma:192` | CERTAIN |
-| 16 | Des contraintes SQL sont annoncées en commentaire alors qu'aucune migration ne les crée. Un commentaire qui promet un filet inexistant est pire que pas de commentaire | `schema.prisma:240` | CERTAIN |
-| 17 | `/api/test/verify-email` valide l'email de n'importe quel compte sans authentification, et n'est fermée que par `NODE_ENV`, dont le défaut est `development` | `app.ts:95` | CERTAIN |
-| 18 | Sur une offre très demandée, plusieurs acheteurs simultanés visent le même code promo et certains reçoivent « plus de stock » alors qu'il en reste | `redemption.service.ts:19` | CERTAIN |
+| 11 | Un manager voit l'email et le solde de tous les autres managers, alors qu'aucun écran manager n'en a besoin | `attribution.controller.ts:186`, garde trop large | CERTAIN |
+| 12 | Un manager voit le pool de tokens de l'entreprise, alors que son écran n'en affiche que le nom | `company.controller.ts:13` | CERTAIN |
+| 13 | Les migrations sont rejouées à chaque réveil du conteneur, et un hoquet de base empêche le démarrage au lieu de réessayer | `package.json:9`, `start:render` | PROBABLE |
+| 14 | Les jobs annoncés toutes les 24 h ne se déclenchent jamais : le processus meurt avant. Seule l'exécution au démarrage tourne, donc au pire moment, pendant le réveil | `jobs/*.ts`, `server.ts:41` | PROBABLE |
+| 15 | Après paiement, l'écran annonce le succès et recharge le solde au bout de 1,5 s, alors que le webhook peut réveiller un conteneur endormi pendant 30 à 60 s. Aucune route de rattrapage n'existe | `OwnerDashboard.tsx:114` | PROBABLE |
+| 16 | L'invariant comptable écrit dans le schéma est faux pour tout manager : sa rétribution crédite son solde sans créer de ligne au registre | `schema.prisma:192` | CERTAIN |
+| 17 | Des contraintes SQL sont annoncées en commentaire alors qu'aucune migration ne les crée. Un commentaire qui promet un filet inexistant est pire que pas de commentaire | `schema.prisma:240` | CERTAIN |
+| 18 | `/api/test/verify-email` valide l'email de n'importe quel compte sans authentification, et n'est fermée que par `NODE_ENV`, dont le défaut est `development` | `app.ts:95` | CERTAIN |
+| 19 | Sur une offre très demandée, plusieurs acheteurs simultanés visent le même code promo et certains reçoivent « plus de stock » alors qu'il en reste | `redemption.service.ts:19` | CERTAIN |
 
 ---
 
@@ -260,8 +315,11 @@ premier rend l'application inutilisable à trois utilisateurs simultanés, le de
 détruire la vitrine publique au prochain redéploiement, le troisième laisse rentrer
 quelqu'un qu'on vient de mettre dehors.
 
-Ensuite **8** et **9**, cinq à dix lignes chacun, qui protègent le tout premier parcours
-utilisateur et transforment une panne silencieuse en échec de déploiement visible.
+Ensuite **8**, **9** et **10**, qui touchent tous les trois au premier parcours utilisateur.
+Les deux premiers coûtent cinq à dix lignes et transforment une panne silencieuse en échec
+visible. Le dixième est le seul de la liste à avoir été rencontré pour de vrai pendant
+l'audit, sur un compte de test : il enferme dehors, définitivement et sans le moindre
+signal, tout utilisateur ayant cliqué une fois sur un lien de désabonnement.
 
 Puis **5**, **6**, **7**, qui touchent à de l'argent ou bloquent définitivement des comptes.
 
