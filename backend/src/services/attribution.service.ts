@@ -126,6 +126,48 @@ export async function allocateToManager(
   }
 }
 
+// A manager can leave the company in four different ways: an admin deletes them, they delete
+// their own account, the employer removes them, or the inactivity job anonymizes them. Any of
+// those can happen while they still hold envelopes they never distributed. Those tokens left
+// the company pool back at allocation time, and only the owning manager may distribute an
+// envelope, so nobody can ever move them again: they are destroyed. The only other way to put
+// tokens back into a pool is to buy them again with a card.
+//
+// So we hand them back to the company and mark the envelopes ANNULEE, keeping the row for the
+// ledger rather than deleting it. The manager's personal balance is deliberately left alone:
+// what they earned dies with their account, it does not go back to the employer.
+//
+// Takes the caller's transaction so the refund cannot survive a failed deletion.
+export async function refundPendingEnvelopes(
+  tx: Prisma.TransactionClient,
+  managerId: string,
+): Promise<void> {
+  const pending = await tx.allocation.findMany({
+    where: { managerId, status: 'A_DISTRIBUER' },
+    select: { id: true, amount: true, companyId: true },
+  });
+  if (pending.length === 0) return;
+
+  // Grouped by company: a user belongs to a single company today, but summing per company
+  // keeps this correct if that ever stops being true.
+  const perCompany = new Map<string, number>();
+  for (const envelope of pending) {
+    perCompany.set(envelope.companyId, (perCompany.get(envelope.companyId) ?? 0) + envelope.amount);
+  }
+
+  for (const [companyId, amount] of perCompany) {
+    await tx.company.update({
+      where: { id: companyId },
+      data: { tokenBalance: { increment: amount } },
+    });
+  }
+
+  await tx.allocation.updateMany({
+    where: { id: { in: pending.map((envelope) => envelope.id) } },
+    data: { status: 'ANNULEE' },
+  });
+}
+
 // Atomic envelope distribution: recomputes R, checks the invariant Σ(line amounts) =
 // amount − R, credits the manager (R) and each employee, marks the envelope DISTRIBUEE.
 // Any failure rolls back everything and the envelope stays A_DISTRIBUER.

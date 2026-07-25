@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/db';
+import { refundPendingEnvelopes } from './attribution.service';
 import type { UpdateProfileInput } from '../schemas/privacy.schemas';
 
 // GDPR: right of access/portability (art. 15 & 20) and right to erasure (art. 17).
@@ -109,6 +110,10 @@ export async function exportUserData(userId: string) {
 //  - auth tokens deleted (no historical value)
 // role/companyId/balance are kept: the ledger references this User row.
 export async function anonymizeUser(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+    // Before detaching the identity: hand any undistributed envelope back to the company,
+    // otherwise those tokens are stranded on an account nobody can log into ever again.
+    await refundPendingEnvelopes(tx, userId);
+
     await tx.user.update({
         where: { id: userId },
         data: {
@@ -117,6 +122,9 @@ export async function anonymizeUser(tx: Prisma.TransactionClient, userId: string
             lastName: null,
             passwordHash: '',
             isEmailVerified: false,
+            // What the person earned is spent or lost with the account. It does NOT go back
+            // to the employer, so removing someone never pays off for the company.
+            balance: 0,
             deletedAt: new Date(),
         },
     });

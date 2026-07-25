@@ -44,6 +44,7 @@ enum RetributionMode {
 enum AllocationStatus {
   A_DISTRIBUER  // Created by the employer, waiting for the manager to distribute it.
   DISTRIBUEE    // Distributed and locked (immutable).
+  ANNULEE       // Manager gone before distributing: the amount went back to the company pool.
 }
 
 // Company is the multi-tenant boundary: every non-ADMIN user and ledger row belongs to one.

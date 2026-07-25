@@ -1,5 +1,6 @@
 import { prisma } from '../lib/db';
 import { Prisma } from '@prisma/client';
+import { refundPendingEnvelopes } from './attribution.service';
 import type { 
   ListUsersQuery, 
   UpdateUserInput, 
@@ -269,7 +270,11 @@ export async function softDeleteUser(id: string) {
       if (admins <= 1) throw new Error('LAST_ADMIN');
     }
 
-    await tx.user.update({ where: { id }, data: { deletedAt: new Date() } });
+    // Same rule as the GDPR anonymization: an undistributed envelope goes back to the
+    // company pool, the personal balance dies with the account.
+    await refundPendingEnvelopes(tx, id);
+
+    await tx.user.update({ where: { id }, data: { balance: 0, deletedAt: new Date() } });
     await tx.refreshToken.updateMany({
       where: { userId: id, isRevoked: false }, data: { isRevoked: true },
     });
