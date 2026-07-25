@@ -37,7 +37,7 @@
 | 10 | Manager demotion avec allocations pending | `backend/src/services/admin.service.ts` | MEDIUM | ⏳ TODO |
 | 11 | Admin peut réduire prix des offres | `backend/src/schemas/offer.schemas.ts` | MEDIUM | ⏳ TODO |
 
-**Référence:** `AUDIT_REPORT/07_AUDIT_TRANSITIONS_ETAT.md`
+**Référence:** `rapports-detailles/transitions-etat.md`
 
 ---
 
@@ -53,7 +53,7 @@
 | 17 | listActiveOffers (Public) sans pagination | `backend/src/services/offer.service.ts:83` | CRITICAL | ⏳ TODO |
 | 18 | GDPR export sans limite | `backend/src/services/privacy.service.ts:34` | HIGH | ⏳ TODO |
 
-**Référence:** `AUDIT_REPORT/10_audit-report.md`
+**Référence:** `rapports-detailles/performance.md`
 
 ---
 
@@ -65,7 +65,7 @@ ne pas les "corriger" : les corriger casserait la prod.
 | # | Bug annoncé | Verdict | Explication |
 |---|-------------|---------|-------------|
 | 19 | Frontend API_URL cassée | ❌ FAUX POSITIF | `client.ts:5` utilise `VITE_API_URL \|\| '/api'`. L'URL relative est voulue : proxy Vite en dev, rewrite Vercel en prod. Définir `VITE_API_URL` vers Render rendrait les appels cross-site, et le cookie refresh (`sameSite: 'strict'`, `auth.controller.ts:31`) ne partirait plus → **auth cassée en prod**. |
-| 20 | render.yaml missing API_URL | ⚠️ **C'ÉTAIT VRAI** | J'avais classé ça en faux positif en supposant que la valeur était saisie dans le tableau de bord Render. Vérification faite le 25/07 : **la case était vide**. `API_URL` retombait donc sur `http://localhost:4000` et le lien de vérification envoyé à chaque inscrit en production pointait vers sa propre machine. Corrigé : la valeur est désormais dans `render.yaml`. Voir `00_BUG_URLS_PUBLIQUES_PRODUCTION.md`. |
+| 20 | render.yaml missing API_URL | ⚠️ **C'ÉTAIT VRAI** | J'avais classé ça en faux positif en supposant que la valeur était saisie dans le tableau de bord Render. Vérification faite le 25/07 : **la case était vide**. `API_URL` retombait donc sur `http://localhost:4000` et le lien de vérification envoyé à chaque inscrit en production pointait vers sa propre machine. Corrigé : la valeur est désormais dans `render.yaml`. Voir `incidents/urls-publiques-production.md`. |
 | 21 | render.yaml missing CLIENT_URL | ⚠️ à moitié vrai | Elle, était bien renseignée, mais sur une URL de prévisualisation de branche Git, qui disparaît si la branche ou le projet change. Remplacée par l'adresse stable dans `render.yaml`. |
 
 **Piège à éviter :** l'URL du backend dans `frontend/vercel.json` est
@@ -88,7 +88,7 @@ délibérément. Ne pas la "simplifier" en `primo-backend.onrender.com` : cette 
 - 1 GDPR violation (password reset tokens)
 - 1 other issue
 
-**Référence:** `AUDIT_REPORT/08_DATABASE_AUDIT_COMPLET.md`
+**Référence:** `rapports-detailles/base-de-donnees.md`
 
 ---
 
@@ -99,7 +99,7 @@ délibérément. Ne pas la "simplifier" en `primo-backend.onrender.com` : cette 
 - 3 retry logic (reliability)
 - 3 monitoring (blind ops)
 
-**Référence:** `AUDIT_REPORT/09_audit_findings.md`
+**Référence:** `rapports-detailles/gestion-erreurs.md`
 
 ---
 
@@ -111,7 +111,7 @@ délibérément. Ne pas la "simplifier" en `primo-backend.onrender.com` : cette 
 - 3 XSS risks
 - 4 Other
 
-**Référence:** `AUDIT_REPORT/12_zod-audit-results.md`, `AUDIT_REPORT/11_SECURITY_AUDIT_FINAL.md`
+**Référence:** `rapports-detailles/validation-zod.md`, `rapports-detailles/securite-synthese.md`
 
 ---
 
@@ -123,7 +123,7 @@ délibérément. Ne pas la "simplifier" en `primo-backend.onrender.com` : cette 
 - 1 Frontend caching
 - 19 Other
 
-**Référence:** `AUDIT_REPORT/06_action-plan.md`
+**Référence:** `rapports-detailles/plan-action-initial.md`
 
 ---
 

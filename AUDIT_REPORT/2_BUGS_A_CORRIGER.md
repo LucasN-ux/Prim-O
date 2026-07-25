@@ -206,7 +206,7 @@ Ce risque s'est réalisé pendant l'audit : `API_URL` n'est pas renseignée dans
 bord Render, donc le lien de vérification envoyé à chaque nouvel inscrit pointe vers
 `http://localhost:4000`, c'est-à-dire vers sa propre machine. **Personne ne peut valider son
 inscription en production.** Le cas complet a son propre document :
-**`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`**, qui explique aussi pourquoi ce bug est invisible
+**`incidents/urls-publiques-production.md`**, qui explique aussi pourquoi ce bug est invisible
 pour un développeur dont le backend local tourne. Le correctif de code décrit ci-dessous est
 en place, il reste à renseigner la variable côté hébergeur.
 
@@ -257,7 +257,7 @@ l'API de Brevo, qui a donné la réponse en une requête.
 ni à la configuration, l'email est arrivé.
 
 Ce point a son propre document, parce qu'il vaut autant pour la méthode de diagnostic que
-pour le bug lui-même : **`00_BUG_BREVO_BLOCAGE_EMAILS.md`**. On y trouve les six fausses
+pour le bug lui-même : **`incidents/brevo-blocage-emails.md`**. On y trouve les six fausses
 pistes écartées, les correctifs classés par urgence, et les commandes que le support peut
 utiliser pour vérifier ou lever un blocage.
 

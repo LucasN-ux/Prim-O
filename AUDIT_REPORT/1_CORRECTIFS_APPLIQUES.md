@@ -251,7 +251,7 @@ de branche Git, qui disparaît si la branche ou le projet est renommé.
 Ces deux adresses sont publiques, pas secrètes. Leur place est dans le versionnement plutôt
 que dans une case que quelqu'un doit penser à remplir. Le cas complet, y compris pourquoi ce
 bug reste invisible pour un développeur dont le backend local tourne, est dans
-`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`.
+`incidents/urls-publiques-production.md`.
 
 **Réserve :** ceci ne prend effet que si le service Render est rattaché au Blueprint. S'il a
 été créé à la main, `render.yaml` n'est jamais lu et les variables doivent être saisies dans
@@ -264,7 +264,7 @@ l'est pas.
 ## Faux positifs et classement corrigé
 
 L'audit a remonté ces trois points comme critiques. Vérification faite, aucun n'en est un,
-et les corriger casserait la production. Documenté en détail dans `38_BUG_TRACKER.md`.
+et les corriger casserait la production. Documenté en détail dans `3_SUIVI.md`.
 
 **`VITE_API_URL` absent d'un `.env.production`.** L'URL relative `/api` est voulue :
 le proxy Vite s'en occupe en développement, le rewrite Vercel en production. Pointer
@@ -279,7 +279,7 @@ son défaut `http://localhost:4000`, et le lien de vérification envoyé à chaq
 production pointait vers sa propre machine. Les deux URL sont désormais écrites directement
 dans `render.yaml` : ce ne sont pas des secrets, leur place est dans le versionnement plutôt
 que dans une case que quelqu'un doit penser à remplir. Détail complet dans
-`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`.
+`incidents/urls-publiques-production.md`.
 
 **L'URL du backend en dur dans `vercel.json`.** Le suffixe `-3arx` dans
 `primo-backend-3arx.onrender.com` n'est pas une coquille : Render l'ajoute quand le nom de
@@ -307,7 +307,7 @@ Par ordre d'importance pour une mise en production.
 | Codes d'invitation non révoqués au rejet d'une entreprise | `admin.service.ts` | Idem, à vérifier |
 | Enveloppes orphelines à la suppression d'une entreprise | `admin.service.ts` | Même famille que le correctif 6, non vérifié |
 | Un admin peut baisser le coût d'une offre après émission des codes | `offer.schemas.ts` | Incohérence entre ce qui a été payé et ce qui est facturé |
-| 17 index manquants | `schema.prisma` | Performance, voir `08_DATABASE_AUDIT_COMPLET.md` |
+| 17 index manquants | `schema.prisma` | Performance, voir `rapports-detailles/base-de-donnees.md` |
 | Pas de rate limit sur `allocate` et `distribute` | `rateLimit.ts` | Un manager peut marteler la base |
 | Pas de jeton CSRF sur les mutations | ensemble du frontend | Atténué par `sameSite: 'strict'`, mais pas fermé |
 
