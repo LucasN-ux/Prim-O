@@ -132,6 +132,27 @@ est rangée.
 
 ## Procédure de support, en attendant
 
+**Lister toutes les adresses bloquées**, à faire tourner de temps en temps : chaque adresse
+présente ici est un utilisateur qui ne peut plus récupérer son compte et qui n'en sait rien.
+
+```bash
+cd backend
+KEY=$(grep '^BREVO_API_KEY=' .env | cut -d= -f2- | tr -d '"'"'"' \r')
+curl -s -H "api-key: $KEY" 'https://api.brevo.com/v3/smtp/blockedContacts?limit=100' \
+  | python3 -c "
+import sys, json
+c = json.load(sys.stdin).get('contacts', [])
+print('aucune adresse bloquee' if not c else f'{len(c)} adresse(s) bloquee(s) :')
+for x in c:
+    print(f\"  {x.get('email')}  |  {x.get('reason',{}).get('code','?')}  |  depuis {x.get('blockedAt','?')[:10]}\")
+"
+```
+
+Attention à ne pas confondre avec la liste des **contacts marketing blacklistés**, qui est
+une autre liste, indépendante, et qui n'a aucun effet sur les emails transactionnels. C'est
+celle qu'on trouve en premier dans l'interface, et chercher là ne donne rien. Pour la
+consulter malgré tout : `GET /v3/contacts`, champ `emailBlacklisted`.
+
 **Vérifier si une adresse est bloquée :**
 
 ```bash
