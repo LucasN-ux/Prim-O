@@ -57,15 +57,25 @@
 
 ---
 
-### 🟠 IMPORTANTS - CONFIGURATION (3 bugs)
+### ⚠️ CONFIGURATION - FAUX POSITIFS (vérifié le 2026-07-21)
 
-| # | Bug | Fichier | Priority | Status |
-|---|-----|---------|----------|--------|
-| 19 | Frontend API_URL cassée | `frontend/.env.production` | CRITICAL | ⏳ TODO |
-| 20 | render.yaml missing API_URL | `render.yaml` | CRITICAL | ⏳ TODO |
-| 21 | render.yaml missing CLIENT_URL | `render.yaml` | HIGH | ⏳ TODO |
+Les 3 "bugs" de configuration remontés par l'audit n'en sont pas. Vérification faite,
+ne pas les "corriger" : les corriger casserait la prod.
 
-**Référence:** `AUDIT_REPORT/03_CHECKLIST_PROD.md` (lignes 94-109)
+| # | Bug annoncé | Verdict | Explication |
+|---|-------------|---------|-------------|
+| 19 | Frontend API_URL cassée | ❌ FAUX POSITIF | `client.ts:5` utilise `VITE_API_URL \|\| '/api'`. L'URL relative est voulue : proxy Vite en dev, rewrite Vercel en prod. Définir `VITE_API_URL` vers Render rendrait les appels cross-site, et le cookie refresh (`sameSite: 'strict'`, `auth.controller.ts:31`) ne partirait plus → **auth cassée en prod**. |
+| 20 | render.yaml missing API_URL | ❌ FAUX POSITIF | `API_URL` est bien déclarée (`render.yaml:17`) en `sync: false` : valeur saisie dans le dashboard Render, pas dans le blueprint. Mettre une valeur en dur écraserait la config existante. |
+| 21 | render.yaml missing CLIENT_URL | ❌ FAUX POSITIF | Idem, déclarée `render.yaml:15` en `sync: false`. |
+
+**Piège à éviter :** l'URL du backend dans `frontend/vercel.json` est
+`https://primo-backend-3arx.onrender.com` — le suffixe `-3arx` est ajouté par Render quand le
+nom de service est déjà pris. Les commits `c9af082` et `77db535` l'ont mise en place
+délibérément. Ne pas la "simplifier" en `primo-backend.onrender.com` : cette URL n'existe pas.
+
+**Seule action restante (ops, pas code) :** vérifier dans le dashboard Render que
+`API_URL` et `CLIENT_URL` ont bien une valeur, sinon `API_URL` retombe sur son défaut
+`http://localhost:4000` (`config.ts:9`) et les liens de vérification email sont morts.
 
 ---
 
