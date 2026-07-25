@@ -56,9 +56,13 @@ rejouait le remboursement **séquentiellement**. Seul un test concurrent a rév�
 
 ## Bloquants pour la mise en ligne
 
+**Deux des trois sont corrigés depuis.** Le détail de chaque correctif et sa preuve sont dans
+[`1_CORRECTIFS_APPLIQUES.md`](1_CORRECTIFS_APPLIQUES.md). Les constats d'origine restent
+ci-dessous, ils expliquent pourquoi il fallait y toucher.
+
 ### 1. Tous les utilisateurs partagent un seul compteur de rate limit
 
-**CERTAIN.** `backend/src/app.ts:37`
+**CERTAIN. ✅ CORRIGÉ, commit `3f5e978`.** `backend/src/app.ts:37`
 
 `app.set('trust proxy', 1)` alors qu'il y a **deux** proxies en production : le rewrite
 Vercel, puis celui de Render. Express remonte donc à l'IP de sortie de Vercel, identique
@@ -75,7 +79,12 @@ de toute façon être par compte.
 
 ### 2. Redéployer la vitrine la remplacerait par l'application
 
-**CERTAIN.** `frontend/.vercel/project.json` contre `frontend/vercel.json`
+**CERTAIN. ⚠️ TOUJOURS OUVERT, mais documenté.** La procédure et les trois issues possibles
+sont dans [`DEPLOIEMENT.md`](../DEPLOIEMENT.md). Ce cas ne se corrige pas en une ligne : les
+deux sites se construisent depuis le même dossier et un dossier ne peut porter qu'un seul
+`vercel.json`. Le choix appartient à l'équipe.
+
+`frontend/.vercel/project.json` contre `frontend/vercel.json`
 
 Le dossier `frontend/` est lié au projet Vercel **prim-o-landing**, mais le `vercel.json`
 qu'il contient construit désormais l'application. Le commit `00a6223` a écrasé la
@@ -92,7 +101,7 @@ la bonne commande pour chacun.
 
 ### 3. Un patron licencié peut revenir dans l'entreprise
 
-**CERTAIN.** `backend/src/middleware/auth.middleware.ts:7`
+**CERTAIN. ✅ CORRIGÉ, commit `a651fef`.** `backend/src/middleware/auth.middleware.ts:7`
 
 `requireAuth` ne relit jamais la base. Ni la suppression du compte, ni un changement de
 rôle, ni la suppression de l'entreprise ne sont visibles avant l'expiration du jeton, soit

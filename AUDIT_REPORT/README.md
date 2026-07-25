@@ -21,7 +21,7 @@ Trois fichiers suffisent. Le reste n'est là que pour le détail.
 
 ## L'état en une page
 
-**Dix bugs corrigés**, tous vérifiés en exécutant le code, pas seulement en le relisant.
+**Douze bugs corrigés**, tous vérifiés en exécutant le code, pas seulement en le relisant.
 
 Les trois plus graves :
 
@@ -34,18 +34,22 @@ Les trois plus graves :
 - Un patron rétrogradé gardait pendant quinze minutes un jeton qui le disait toujours
   patron, et pouvait continuer à se servir dans le pool de l'entreprise.
 
-**Trois bugs bloquent encore la mise en ligne :**
+**Sur les trois bugs qui bloquaient la mise en ligne, deux sont corrigés :**
 
-1. Le rate limit est global à toute l'application : dix connexions par quart d'heure pour
-   l'ensemble des utilisateurs, à cause d'un `trust proxy` mal réglé derrière deux proxies.
-2. Redéployer la vitrine la remplacerait par l'application, les deux projets Vercel se
-   marchant dessus.
-3. `requireAuth` ne relit jamais la base, donc une révocation reste sans effet pendant
-   quinze minutes, et un code d'invitation généré pendant ce laps de temps reste valide
-   vingt-quatre heures.
+| Bug | Ce que ça donnait concrètement | État |
+|---|---|---|
+| Compteur de connexions global à toute l'application | à trois personnes qui testent une démo, **plus personne ne peut se connecter** pendant quinze minutes | ✅ corrigé |
+| Une révocation restait sans effet quinze minutes | un patron licencié repartait avec un **code d'invitation valide 24 h** et revenait dans l'entreprise | ✅ corrigé |
+| Les deux projets Vercel se marchent dessus | redéployer la vitrine **publierait l'application par-dessus**, sur l'URL publique | ⚠️ ouvert |
 
-Le détail, l'impact et le correctif de chacun sont dans
-[`2_BUGS_A_CORRIGER.md`](2_BUGS_A_CORRIGER.md).
+Le troisième ne se corrige pas en une ligne : les deux sites se construisent depuis le même
+dossier et un dossier ne peut porter qu'un seul `vercel.json`. La procédure, le piège et les
+trois issues possibles sont dans [`DEPLOIEMENT.md`](../DEPLOIEMENT.md), le choix appartient à
+l'équipe.
+
+Restent ensuite six bugs graves, dont un paiement encaissé sans crédit et une entreprise qui
+peut perdre son patron définitivement. Le détail, l'impact et le correctif de chacun sont
+dans [`2_BUGS_A_CORRIGER.md`](2_BUGS_A_CORRIGER.md).
 
 ---
 
@@ -59,11 +63,18 @@ erreurs, performance, autorisations, validation des entrées, injections, prépa
 déploiement. La seconde passe recevait la liste de ce qui était déjà traité, pour chercher
 ailleurs plutôt que de reproduire les mêmes constats.
 
-**Une vérification systématique de chaque remontée.** C'est le point le plus important :
-**trois remontées classées « critiques » se sont révélées fausses**, et les corriger aurait
-cassé la production. L'une d'elles aurait supprimé l'authentification en ligne. Elles sont
-documentées dans [`1_CORRECTIFS_APPLIQUES.md`](1_CORRECTIFS_APPLIQUES.md), section « Faux
-positifs », précisément pour que personne ne les « corrige » de bonne foi.
+**Une vérification systématique de chaque remontée.** C'est le point le plus important, et il
+coupe dans les deux sens :
+
+- **Deux remontées classées « critiques » étaient fausses**, et les corriger aurait cassé la
+  production. L'une aurait supprimé l'authentification en ligne.
+- **Une remontée classée « faux positif » était vraie.** Elle avait été écartée en supposant
+  qu'une valeur était renseignée côté hébergeur. Elle ne l'était pas, et le lien de
+  vérification envoyé à chaque nouvel inscrit pointait vers sa propre machine.
+
+Les deux cas sont documentés dans
+[`1_CORRECTIFS_APPLIQUES.md`](1_CORRECTIFS_APPLIQUES.md), section « Faux positifs », avec le
+raisonnement qui a mené à l'erreur. Supposer coûte cher, dans un sens comme dans l'autre.
 
 Aucune correction n'a été écrite sur la seule foi d'un rapport. Chaque bug a d'abord été
 retrouvé dans le code.

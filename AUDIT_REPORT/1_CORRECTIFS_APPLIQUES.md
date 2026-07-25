@@ -10,7 +10,7 @@ Branche : `featmateo`. Tout est commité, rien n'est en attente dans l'arbre de 
 ## Résumé en dix lignes
 
 Un audit a été mené sur l'ensemble du projet et a produit environ 80 remontées, classées
-dans ce dossier. **Dix bugs ont été corrigés**, tous vérifiés en exécutant le code et pas
+dans ce dossier. **Douze bugs ont été corrigés**, tous vérifiés en exécutant le code et pas
 seulement en le relisant. Deux remontées se sont révélées être des faux positifs, et les
 corriger aurait cassé la production : elles sont documentées plus bas pour que personne ne
 les « corrige » par erreur.
@@ -258,6 +258,86 @@ bug reste invisible pour un développeur dont le backend local tourne, est dans
 le tableau de bord. Le garde-fou du correctif 9 rend la réponse observable : si le
 déploiement démarre, le Blueprint est lu ; s'il échoue en réclamant les deux URL, il ne
 l'est pas.
+
+### 11. Dix connexions par quart d'heure pour l'application entière
+
+**Pourquoi il fallait le corriger :** à trois personnes qui testent une démo, plus personne
+ne peut se connecter pendant quinze minutes. Pas trois personnes chacune limitée à dix
+tentatives : **trois personnes qui épuisent ensemble le même quota de dix**, valable pour
+tous les utilisateurs de Prim'O. Le compteur des rafraîchissements de session, lui, tombe
+encore plus vite, puisque chaque chargement de page en consomme un.
+
+**Fichiers :** `backend/src/app.ts`, `backend/src/lib/rateLimit.ts`
+**Commit :** `3f5e978`
+
+Deux proxies se trouvent devant Express en production, la redirection Vercel puis celui de
+Render, mais `trust proxy` valait 1. Express lisait donc la mauvaise entrée de
+`X-Forwarded-For` et voyait tous les visiteurs sous une seule et même adresse, celle de
+sortie de Vercel. Tous les limiteurs partageaient un unique compteur.
+
+Le limiteur de connexion compte désormais **par compte** et non par adresse. Une attaque par
+force brute vise un compte depuis de nombreuses adresses, l'adresse était donc la mauvaise
+chose à compter. Ça ferme au passage un trou lié au fait de faire confiance à deux
+intermédiaires : quiconque appelle Render en direct, sans passer par Vercel, écrit lui-même
+son `X-Forwarded-For` et peut changer d'adresse à volonté. Il ne peut pas changer le compte
+qu'il essaie de forcer.
+
+**Vérifié en :** rejouant la chaîne d'en-têtes de production. Avec 1, `req.ip` est le proxy ;
+avec 2, c'est le vrai visiteur. Puis sur l'application : la onzième tentative sur un compte
+est refusée, **tandis qu'un autre compte depuis la même machine passe toujours**.
+
+### 12. Un patron licencié pouvait revenir dans l'entreprise
+
+**Pourquoi il fallait le corriger :** supprimer un compte ne le mettait pas dehors. Pendant
+quinze minutes, la personne gardait un accès complet. Et ce n'était pas une fenêtre de
+quinze minutes, mais de vingt-quatre heures : le temps d'appeler
+`POST /api/invites/generate` et de repartir avec un code d'invitation valide une journée et
+cent usages. Elle recrée un compte, l'utilise, et se retrouve à l'intérieur de l'entreprise
+qui vient de l'exclure. Un manager licencié disposait de la même fenêtre sur
+`DELETE /api/employees/:id`, qui anonymise des collègues de façon irréversible.
+
+**Fichier :** `backend/src/middleware/auth.middleware.ts`
+**Commit :** `a651fef`
+
+`requireAuth` construisait l'identité de l'appelant à partir du seul jeton. Or le rôle et
+l'entreprise y sont figés au moment où il est émis, et il vit quinze minutes. Révoquer le
+jeton de rafraîchissement, ce que le code faisait déjà, n'a aucun effet sur un jeton d'accès
+déjà entre les mains de quelqu'un.
+
+C'est maintenant la base qui décide. Une lecture sur clé primaire par requête authentifiée,
+exactement ce que `requireAdmin` faisait déjà, généralisé à toutes les routes.
+
+**Vérifié en :** supprimant un compte puis en rejouant le même jeton. Sur la version
+d'avant : `POST /api/invites/generate` répondait **201**, le compte supprimé repartait bien
+avec son code d'invitation. Après : 401 sur toutes les routes, immédiatement.
+
+Un détail trouvé en testant : un identifiant non conforme dans le jeton faisait désormais
+échouer Prisma et sortait en 500. C'est un mauvais jeton, pas une panne serveur, donc il
+répond 401. Les autres erreurs continuent volontairement de sortir en 500 : répondre 401
+pendant une panne de base déconnecterait tout le monde pour rien.
+
+---
+
+## Documenté mais pas corrigé : le conflit entre les deux projets Vercel
+
+**Pourquoi ça compte :** la commande de redéploiement de la vitrine, `cd frontend && npx
+vercel deploy --prod`, **publierait l'application par-dessus la vitrine**, sur l'URL
+publique. Le dossier `frontend/` est lié au projet `prim-o-landing`, alors que le
+`vercel.json` qu'il contient construit l'application.
+
+Ce cas ne se corrige pas en une ligne, et c'est pour ça qu'il reste ouvert. Les deux sites
+se construisent depuis le même dossier, la vitrine n'a pas son propre `package.json`, et un
+dossier ne peut porter qu'un seul `vercel.json`, lequel a priorité sur les réglages du
+tableau de bord. Deux projets Vercel enracinés au même endroit sont donc condamnés à
+partager la même configuration de build.
+
+La procédure, le piège et les trois issues possibles sont dans
+[`DEPLOIEMENT.md`](../DEPLOIEMENT.md), à la racine du dépôt. Le choix entre les trois
+appartient à l'équipe.
+
+En attendant, **la commande générique est à considérer comme dangereuse**. Le fichier
+`frontend/.vercel/project.json` est ignoré par Git, donc le piège peut être armé sur une
+machine et pas sur une autre.
 
 ---
 
