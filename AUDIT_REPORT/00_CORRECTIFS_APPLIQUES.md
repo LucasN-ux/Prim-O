@@ -10,17 +10,24 @@ Branche : `featmateo`. Tout est commité, rien n'est en attente dans l'arbre de 
 ## Résumé en dix lignes
 
 Un audit a été mené sur l'ensemble du projet et a produit environ 80 remontées, classées
-dans ce dossier. Six bugs ont été corrigés, tous vérifiés en exécutant le code et pas
-seulement en le relisant. Trois remontées se sont révélées être des faux positifs, et
-les corriger aurait cassé la production : elles sont documentées plus bas pour que
-personne ne les "corrige" par erreur.
+dans ce dossier. **Dix bugs ont été corrigés**, tous vérifiés en exécutant le code et pas
+seulement en le relisant. Deux remontées se sont révélées être des faux positifs, et les
+corriger aurait cassé la production : elles sont documentées plus bas pour que personne ne
+les « corrige » par erreur.
 
-Le plus grave de ce qui a été corrigé faisait disparaître des tokens achetés en euros,
-sans trace et sans moyen de les récupérer autrement qu'en les rachetant.
+Deux d'entre eux fabriquaient des tokens à partir de rien : cinq clics simultanés sur un
+même bouton transformaient une enveloppe de 100 en 500. Un autre les faisait disparaître,
+sans trace et sans moyen de les récupérer autrement qu'en les rachetant par carte.
+
+Un dernier point, honnête : **deux de ces dix correctifs réparent des bugs introduits
+pendant cet audit**, l'un dans un correctif de la veille, l'autre dans une erreur de
+diagnostic. Ils sont signalés comme tels. Le fait qu'ils aient été trouvés vient d'une seule
+habitude : relire ses propres correctifs et les tester en contre-épreuve, c'est-à-dire
+vérifier que le test échoue bien sur la version d'avant.
 
 ---
 
-## Les six correctifs
+## Les correctifs
 
 ### 1. Les erreurs du webhook Stripe partaient en silence
 
@@ -174,7 +181,87 @@ création de tokens à partir de rien.
 
 ---
 
-## Trois faux positifs, à ne surtout pas "corriger"
+### 7. Cinq clics simultanés transformaient une enveloppe de 100 en 500 tokens
+
+**Fichier :** `backend/src/services/attribution.service.ts`, `distributeEnvelope`
+**Commit :** `7d1fad0`
+
+Le statut de l'enveloppe était vérifié par une simple lecture, puis réécrit en `DISTRIBUEE`
+avec une clause `where` portant sur le seul identifiant. Deux requêtes lancées en même temps
+passaient donc toutes les deux le contrôle, et créditaient toutes les deux. Un double clic
+suffisait, ou un rejeu du navigateur après un délai d'attente.
+
+Le correctif réserve l'enveloppe par un `updateMany` gardé sur le statut **avant** de
+créditer qui que ce soit, et abandonne si aucune ligne ne correspond. C'est exactement le
+motif que ce fichier appliquait déjà correctement au pool de l'entreprise, il n'avait
+simplement pas été appliqué ici.
+
+**Vérifié en :** lançant cinq distributions concurrentes sur une même enveloppe de 100.
+Avant correction : **5 succès et 500 tokens distribués**. Après : 1 succès, 100 tokens.
+
+### 8. Le remboursement d'enveloppe pouvait payer deux fois
+
+**Fichier :** `backend/src/services/attribution.service.ts`, `refundPendingEnvelopes`
+**Commit :** `7d1fad0`. **Régression introduite par le correctif n° 6, la veille.**
+
+Même défaut, dans le correctif écrit la veille. La fonction lisait les enveloppes en attente,
+recréditait le pool, puis les annulait sans revérifier le statut. Un manager qui validait sa
+répartition pendant qu'un admin supprimait son compte était payé **et** remboursé : une
+enveloppe de 200 produisait 400 tokens.
+
+La fenêtre s'ouvre toute seule, sans intervention humaine : le job d'anonymisation des
+comptes inactifs appelle ce chemin toutes les 24 heures.
+
+Le correctif annule d'abord, avec la garde sur le statut, et ne rembourse que ce que son
+annulation a réellement pris.
+
+**À retenir :** le test d'idempotence écrit la veille passait, parce qu'il rejouait le
+remboursement **séquentiellement**. Seul un test concurrent a révélé le trou.
+
+### 9. Une variable d'environnement oubliée ne faisait aucun bruit
+
+**Fichier :** `backend/src/config.ts`
+**Commit :** `a7b69d7`
+
+Une URL publique absente du tableau de bord de l'hébergeur retombait en silence sur son
+défaut `localhost`. Le service passait son health check et se déclarait en bonne santé,
+pendant qu'un parcours utilisateur entier était mort. Pire : une case **présente mais vide**
+n'était même pas remplacée par le défaut, `z.string()` acceptant la chaîne vide.
+
+Les deux trous sont fermés. `.url()` rejette la chaîne vide, et un `refine` fait échouer le
+démarrage en production si les URL sont restées sur localhost.
+
+**Vérifié dans quatre situations :** production sans les variables échoue avec le message,
+production avec les deux démarre, développement local inchangé, production avec des cases
+vides échoue sur `Invalid URL`.
+
+**Attention à l'ordre de déploiement :** ce garde-fou fait volontairement échouer le
+démarrage, donc les variables doivent être renseignées **avant** de déployer ce commit.
+
+### 10. Les URL publiques sont désormais versionnées
+
+**Fichier :** `render.yaml`
+**Commit :** `967baca`
+
+`API_URL` n'avait aucune valeur dans le tableau de bord Render, donc le lien de vérification
+envoyé à chaque inscrit en production pointait vers sa propre machine. Personne ne pouvait
+valider son compte. `CLIENT_URL`, elle, était renseignée mais sur une URL de prévisualisation
+de branche Git, qui disparaît si la branche ou le projet est renommé.
+
+Ces deux adresses sont publiques, pas secrètes. Leur place est dans le versionnement plutôt
+que dans une case que quelqu'un doit penser à remplir. Le cas complet, y compris pourquoi ce
+bug reste invisible pour un développeur dont le backend local tourne, est dans
+`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`.
+
+**Réserve :** ceci ne prend effet que si le service Render est rattaché au Blueprint. S'il a
+été créé à la main, `render.yaml` n'est jamais lu et les variables doivent être saisies dans
+le tableau de bord. Le garde-fou du correctif 9 rend la réponse observable : si le
+déploiement démarre, le Blueprint est lu ; s'il échoue en réclamant les deux URL, il ne
+l'est pas.
+
+---
+
+## Faux positifs et classement corrigé
 
 L'audit a remonté ces trois points comme critiques. Vérification faite, aucun n'en est un,
 et les corriger casserait la production. Documenté en détail dans `38_BUG_TRACKER.md`.

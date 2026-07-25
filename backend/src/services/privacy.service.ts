@@ -108,7 +108,10 @@ export async function exportUserData(userId: string) {
 //  - first/last name cleared
 //  - passwordHash emptied -> login becomes impossible
 //  - auth tokens deleted (no historical value)
-// role/companyId/balance are kept: the ledger references this User row.
+//  - balance zeroed: nobody can ever log in to spend it again, and it deliberately does
+//    NOT go back to the employer, so removing someone never pays off for the company
+//  - undistributed envelopes handed back to the company pool (see refundPendingEnvelopes)
+// role and companyId are kept: the ledger references this User row.
 export async function anonymizeUser(tx: Prisma.TransactionClient, userId: string): Promise<void> {
     // Before detaching the identity: hand any undistributed envelope back to the company,
     // otherwise those tokens are stranded on an account nobody can log into ever again.

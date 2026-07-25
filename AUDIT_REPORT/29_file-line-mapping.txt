@@ -1,0 +1,371 @@
+SECURITY AUDIT: FILE LOCATION MAPPING
+======================================
+
+
+KEY SECURITY IMPLEMENTATIONS
+=============================
+
+1. MIME TYPE WHITELIST
+   File: backend/src/lib/upload.ts
+   Lines: 14-19
+   Code:
+     // Accepted MIME types mapped to the extension we assign...
+     const ALLOWED = new Map<string, string>([
+       ['image/jpeg', '.jpg'],
+       ['image/png', '.png'],
+       ['image/webp', '.webp'],
+     ]);
+
+2. FILENAME GENERATION (SERVER-ASSIGNED)
+   File: backend/src/lib/upload.ts
+   Lines: 21-27
+   Code:
+     const storage = multer.diskStorage({
+       destination: (_req, _file, cb) => cb(null, OFFERS_DIR),
+       filename: (_req, file, cb) => {
+         const ext = ALLOWED.get(file.mimetype) ?? '';
+         cb(null, `${crypto.randomUUID()}${ext}`); // random name: no path traversal
+       },
+     });
+
+3. FILE FILTER (MIME TYPE VALIDATION)
+   File: backend/src/lib/upload.ts
+   Lines: 31-37
+   Code:
+     export const offerImageUpload = multer({
+       storage,
+       limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+       fileFilter: (_req, file, cb) => {
+         if (ALLOWED.has(file.mimetype)) cb(null, true);
+         else cb(new Error('INVALID_IMAGE_TYPE'));
+       },
+     }).single('image');
+
+4. FILE SIZE LIMIT
+   File: backend/src/lib/upload.ts
+   Line: 33
+   Code:
+     limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+
+5. PATH TRAVERSAL GUARD
+   File: backend/src/lib/upload.ts
+   Lines: 40-47
+   Code:
+     // Delete an uploaded file given its web path...
+     export async function removeUploadedFile(imageUrl: string): Promise<void> {
+       const rel = imageUrl.replace(/^\/uploads\//, '');
+       const abs = path.join(UPLOADS_DIR, rel);
+       if (abs !== UPLOADS_DIR && !abs.startsWith(UPLOADS_DIR + path.sep)) return;
+       await fs.unlink(abs).catch(() => { /* already gone */ });
+     }
+
+6. UPLOAD DIRECTORY PATH
+   File: backend/src/lib/upload.ts
+   Lines: 6-9
+   Code:
+     export const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
+     const OFFERS_DIR = path.join(UPLOADS_DIR, 'offers');
+     export const OFFERS_PUBLIC_PREFIX = '/uploads/offers';
+
+7. MIDDLEWARE: MULTER ERROR HANDLING
+   File: backend/src/controllers/offer.controller.ts
+   Lines: 93-109
+   Code:
+     export function uploadOfferImageMiddleware(req: Request, res: Response, next: NextFunction): void {
+       offerImageUpload(req, res, (err: unknown) => {
+         if (err) {
+           if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+             next(new AppError(413, 'Image trop lourde (2 Mo maximum).')); return;
+           }
+           if (err instanceof Error && err.message === 'INVALID_IMAGE_TYPE') {
+             next(new AppError(415, 'Format non supporté. Utilise JPG, PNG ou WebP.')); return;
+           }
+           next(err instanceof Error ? err : new AppError(400, 'Upload invalide.'));
+           return;
+         }
+         next();
+       });
+     }
+
+8. CONTROLLER: FILE UPLOAD HANDLING
+   File: backend/src/controllers/offer.controller.ts
+   Lines: 111-127
+   Code:
+     export async function uploadOfferImageController(req: Request, res: Response, next: NextFunction): Promise<void> {
+       const { id } = req.params;
+       if (!id) { next(new AppError(400, 'ID de l\'offre requis.')); return; }
+       if (!req.file) { next(new AppError(400, 'Aucune image fournie.')); return; }
+       try {
+         const offer = await setOfferImage(String(id), req.file.filename);
+         res.json({ offer });
+       } catch (err) {
+         // On failure (offer not found or otherwise), remove the freshly uploaded file...
+         await removeUploadedFile(`${OFFERS_PUBLIC_PREFIX}/${req.file.filename}`);
+         if (err instanceof Error && err.message === 'OFFER_NOT_FOUND') {
+           next(new AppError(404, 'Offre non trouvée.')); return;
+         }
+         next(err);
+       }
+     }
+
+9. SERVICE: ORPHAN CLEANUP
+   File: backend/src/services/offer.service.ts
+   Lines: 51-59
+   Code:
+     // Attaches a photo (already written to disk by multer) to an offer.
+     // The previous photo, if any, is removed best-effort after the DB update.
+     export const setOfferImage = async (id: string, filename: string) => {
+       const existing = await prisma.partnerOffer.findUnique({ where: { id }, select: { imageUrl: true } })
+       if (!existing) throw new Error('OFFER_NOT_FOUND')
+       const imageUrl = `${OFFERS_PUBLIC_PREFIX}/${filename}`
+       const updated = await prisma.partnerOffer.update({ where: { id }, data: { imageUrl } })
+       if (existing.imageUrl) await removeUploadedFile(existing.imageUrl)
+       return updated
+     }
+
+10. ROUTE: UPLOAD ENDPOINT
+    File: backend/src/routes/admin.routes.ts
+    Lines: 38-40
+    Code:
+      // Offer photo: multipart upload (field "image") and deletion.
+      router.patch('/offers/:id/image', uploadOfferImageMiddleware, uploadOfferImageController);
+      router.delete('/offers/:id/image', deleteOfferImageController);
+
+11. APP: AUTHENTICATION GUARD
+    File: backend/src/app.ts
+    Line: 89
+    Code:
+      app.use('/api/admin', requireAuth, requireAdmin, adminRouter);
+
+12. APP: STATIC FILE SERVING
+    File: backend/src/app.ts
+    Lines: 76-78
+    Code:
+      // Uploaded files (offer photos) served statically. Public (landing showcase).
+      // Under /api/uploads to go through the Vite proxy in dev (which only routes /api).
+      app.use('/api/uploads', express.static(UPLOADS_DIR));
+
+13. MIDDLEWARE: AUTHENTICATION
+    File: backend/src/middleware/auth.middleware.ts
+    Lines: 7-25
+    Code:
+      export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+        const header = req.headers.authorization;
+        if (!header?.startsWith('Bearer ')) {
+          next(new AppError(401, 'Token manquant.'));
+          return;
+        }
+        const token = header.slice(7);
+        try {
+          const payload = verifyAccessToken(token);
+          req.user = {
+            id: payload.sub,
+            role: payload.role,
+            ...(payload.companyId ? { companyId: payload.companyId } : {}),
+          };
+          next();
+        } catch {
+          next(new AppError(401, 'Token invalide ou expiré.'));
+        }
+      }
+
+14. MIDDLEWARE: AUTHORIZATION (ADMIN CHECK)
+    File: backend/src/middleware/auth.middleware.ts
+    Lines: 50-70
+    Code:
+      export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+        // The token says ADMIN, but role/status can change mid-session...
+        if (req.user?.role !== 'ADMIN') {
+          next(new AppError(403, 'Accès réservé aux administrateurs.'));
+          return;
+        }
+        try {
+          const user = await prisma.user.findFirst({
+            where: { id: req.user.id, deletedAt: null },
+            select: { role: true },
+          });
+          if (!user || user.role !== 'ADMIN') {
+            next(new AppError(403, 'Accès réservé aux administrateurs.'));
+            return;
+          }
+          next();
+        } catch (err) {
+          next(err);
+        }
+      }
+
+
+VULNERABILITY LOCATIONS
+=======================
+
+MISSING: Magic Byte Validation
+   File: backend/src/lib/upload.ts
+   Lines: 34-37
+   Issue: fileFilter only checks file.mimetype (client-controlled header)
+   What's Missing: No validation of actual file binary signatures
+   Example Attack:
+     Upload PHP code with Content-Type: image/jpeg
+     Server accepts because mimetype = 'image/jpeg'
+     No magic byte check performed
+   Risk Level: MEDIUM (mitigated by static serving)
+   Recommendation: Add file-type npm package for magic byte validation
+
+IMPLICIT: Express JSON Limit
+   File: backend/src/app.ts
+   Line: 68
+   Code: app.use(express.json());
+   Issue: No explicit limit parameter
+   Default: 100kb (Express 5.x)
+   Risk Level: LOW (safe default, but implicit)
+   Recommendation: app.use(express.json({ limit: '1mb' }));
+
+IMPLICIT: Multipart Field Limits
+   File: backend/src/lib/upload.ts
+   Lines: 31-37
+   Issue: multer config only specifies fileSize, not fieldSize or fields
+   Risk Level: LOW (.single('image') rejects extra fields)
+   Recommendation:
+     limits: {
+       fileSize: 2 * 1024 * 1024,
+       files: 1,
+       fields: 1,
+       fieldSize: 1 * 1024,
+     }
+
+
+SAFE PATTERNS OBSERVED
+======================
+
+Path: backend/src/lib/upload.ts:23-26
+Pattern: Server assigns filename (UUID + extension)
+Status: EXCELLENT (prevents all filename-based attacks)
+
+Path: backend/src/lib/upload.ts:42-46
+Pattern: removeUploadedFile boundary check
+Status: EXCELLENT (prevents path traversal on deletion)
+
+Path: backend/src/controllers/offer.controller.ts:119-121
+Pattern: Orphan file cleanup on error
+Status: GOOD (prevents disk space leaks)
+
+Path: backend/src/app.ts:78
+Pattern: express.static() for file delivery
+Status: EXCELLENT (static serving = no execution risk)
+
+Path: backend/src/app.ts:89
+Pattern: requireAuth + requireAdmin on upload route
+Status: EXCELLENT (authentication + authorization both enforced)
+
+Path: backend/src/middleware/auth.middleware.ts:50-70
+Pattern: DB-verified admin check
+Status: EXCELLENT (prevents stale token exploitation)
+
+
+DANGEROUS PATTERNS NOT FOUND
+=============================
+
+Pattern: Extension-only validation
+Status: NOT FOUND (good!)
+Why: Server assigns extension, doesn't trust client filename
+
+Pattern: Missing size limits
+Status: NOT FOUND (good!)
+Why: 2 MB limit enforced via multer
+
+Pattern: Double extension attacks
+Status: NOT FOUND (good!)
+Why: Random UUID + single extension
+
+Pattern: Null byte injection
+Status: NOT FOUND (good!)
+Why: Random filename
+
+Pattern: Path traversal via filename
+Status: NOT FOUND (good!)
+Why: Server uses UUID, boundary check in deletion
+
+Pattern: Executable file serving
+Status: NOT FOUND (good!)
+Why: Static serving in Node.js (no CGI handler)
+
+Pattern: Unauthenticated uploads
+Status: NOT FOUND (good!)
+Why: requireAuth middleware enforced
+
+Pattern: Non-admin uploads
+Status: NOT FOUND (good!)
+Why: requireAdmin middleware enforced
+
+
+DEPENDENCIES REVIEW
+===================
+
+Package: multer@^2.2.0
+File: backend/package.json
+Purpose: Multipart form data parsing
+Security: Using diskStorage (safe for DoS)
+Status: Current stable version, no known vulnerabilities
+
+Package: zod@^4.4.3
+File: backend/package.json
+Purpose: Input validation
+Usage: Validate offer schemas (not file upload)
+Status: Current version, actively maintained
+
+Package: sanitize-html@^2.17.4
+File: backend/package.json
+Purpose: XSS protection for text inputs
+Usage: Not used for file uploads
+Status: Current version
+
+MISSING Dependency: file-type
+Purpose: Magic byte validation
+Status: NOT INSTALLED (recommendation to add)
+Installation: npm install file-type
+
+
+TESTS NEEDED
+============
+
+Test: Invalid MIME type
+  File: backend/src/lib/upload.ts (fileFilter)
+  Expected: Error 415
+
+Test: File > 2MB
+  File: backend/src/lib/upload.ts (limits.fileSize)
+  Expected: Error 413
+
+Test: Unauthenticated
+  File: backend/src/app.ts (requireAuth)
+  Expected: Error 401
+
+Test: Non-admin
+  File: backend/src/middleware/auth.middleware.ts (requireAdmin)
+  Expected: Error 403
+
+Test: Orphan cleanup
+  File: backend/src/controllers/offer.controller.ts (cleanup on error)
+  Expected: File deleted on failure
+
+Test: Image replacement
+  File: backend/src/services/offer.service.ts (setOfferImage)
+  Expected: Old image deleted
+
+
+SUMMARY BY SEVERITY
+===================
+
+CRITICAL: 0 issues
+
+HIGH: 0 issues
+      (Magic byte validation is MEDIUM, not HIGH, due to static serving mitigation)
+
+MEDIUM: 1 issue
+        - Missing magic byte validation (backend/src/lib/upload.ts:34-37)
+
+LOW: 2 issues
+     - Implicit JSON limit (backend/src/app.ts:68)
+     - Implicit multipart limits (backend/src/lib/upload.ts:31-37)
+
+TOTAL: 3 findings (all with mitigations or workarounds)
+
