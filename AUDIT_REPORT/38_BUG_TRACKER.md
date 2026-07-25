@@ -65,8 +65,8 @@ ne pas les "corriger" : les corriger casserait la prod.
 | # | Bug annoncé | Verdict | Explication |
 |---|-------------|---------|-------------|
 | 19 | Frontend API_URL cassée | ❌ FAUX POSITIF | `client.ts:5` utilise `VITE_API_URL \|\| '/api'`. L'URL relative est voulue : proxy Vite en dev, rewrite Vercel en prod. Définir `VITE_API_URL` vers Render rendrait les appels cross-site, et le cookie refresh (`sameSite: 'strict'`, `auth.controller.ts:31`) ne partirait plus → **auth cassée en prod**. |
-| 20 | render.yaml missing API_URL | ❌ FAUX POSITIF | `API_URL` est bien déclarée (`render.yaml:17`) en `sync: false` : valeur saisie dans le dashboard Render, pas dans le blueprint. Mettre une valeur en dur écraserait la config existante. |
-| 21 | render.yaml missing CLIENT_URL | ❌ FAUX POSITIF | Idem, déclarée `render.yaml:15` en `sync: false`. |
+| 20 | render.yaml missing API_URL | ⚠️ **C'ÉTAIT VRAI** | J'avais classé ça en faux positif en supposant que la valeur était saisie dans le tableau de bord Render. Vérification faite le 25/07 : **la case était vide**. `API_URL` retombait donc sur `http://localhost:4000` et le lien de vérification envoyé à chaque inscrit en production pointait vers sa propre machine. Corrigé : la valeur est désormais dans `render.yaml`. Voir `00_BUG_URLS_PUBLIQUES_PRODUCTION.md`. |
+| 21 | render.yaml missing CLIENT_URL | ⚠️ à moitié vrai | Elle, était bien renseignée, mais sur une URL de prévisualisation de branche Git, qui disparaît si la branche ou le projet change. Remplacée par l'adresse stable dans `render.yaml`. |
 
 **Piège à éviter :** l'URL du backend dans `frontend/vercel.json` est
 `https://primo-backend-3arx.onrender.com` — le suffixe `-3arx` est ajouté par Render quand le

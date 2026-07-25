@@ -185,9 +185,14 @@ le proxy Vite s'en occupe en développement, le rewrite Vercel en production. Po
 de refresh est en `sameSite: 'strict'`, il ne serait plus envoyé du tout. L'authentification
 tomberait en production.
 
-**`API_URL` et `CLIENT_URL` en `sync: false` dans `render.yaml`.** Ce n'est pas un oubli,
-c'est la façon déclarée de dire que la valeur est saisie dans le tableau de bord Render.
-Mettre une valeur en dur dans le blueprint écraserait la configuration existante.
+**`API_URL` et `CLIENT_URL` en `sync: false` dans `render.yaml`.** ⚠️ **Ce classement était
+faux, corrigé le 25/07.** J'avais supposé que la valeur était saisie dans le tableau de bord
+Render. Vérification faite : la case `API_URL` était **vide**, la variable retombait donc sur
+son défaut `http://localhost:4000`, et le lien de vérification envoyé à chaque inscrit en
+production pointait vers sa propre machine. Les deux URL sont désormais écrites directement
+dans `render.yaml` : ce ne sont pas des secrets, leur place est dans le versionnement plutôt
+que dans une case que quelqu'un doit penser à remplir. Détail complet dans
+`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`.
 
 **L'URL du backend en dur dans `vercel.json`.** Le suffixe `-3arx` dans
 `primo-backend-3arx.onrender.com` n'est pas une coquille : Render l'ajoute quand le nom de
