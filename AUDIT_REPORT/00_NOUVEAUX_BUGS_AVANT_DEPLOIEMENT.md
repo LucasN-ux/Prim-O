@@ -244,27 +244,13 @@ d'inscription, quatre blocages instantanés, et quatre réponses `201` côté se
 perdue à chercher du côté du spam et de la configuration de l'expéditeur avant d'interroger
 l'API de Brevo, qui a donné la réponse en une requête.
 
-Trois choses à faire, de la plus urgente à la plus structurante :
+**Confirmé de bout en bout** : après retrait de l'adresse de la liste, sans toucher au code
+ni à la configuration, l'email est arrivé.
 
-1. **Retirer le lien de désabonnement des emails transactionnels.** Une vérification
-   d'adresse et une réinitialisation de mot de passe ne sont pas du marketing. Elles ne
-   devraient pas offrir ce choix, ni être soumises à cette liste.
-2. **Détecter le blocage avant de répondre 201.** L'API expose
-   `GET /v3/smtp/blockedContacts/{email}`. Un appel avant l'envoi, ou une vérification
-   après, permet de renvoyer un message utile plutôt qu'un faux succès.
-3. **Donner au support un moyen de voir et de lever un blocage**, sans quoi chaque cas
-   demandera un accès au tableau de bord Brevo.
-
-En attendant, la commande qui débloque une adresse, utile au support :
-
-```bash
-curl -s -X DELETE -H "api-key: $BREVO_API_KEY" \
-  https://api.brevo.com/v3/smtp/blockedContacts/adresse@exemple.fr -w "HTTP %{http_code}\n"
-```
-
-Un `204` signifie que c'est fait. À noter : dans l'interface Brevo, cette liste est rangée
-du côté transactionnel, et non avec les contacts blacklistés du marketing, ce qui la rend
-difficile à trouver quand on la cherche au mauvais endroit.
+Ce point a son propre document, parce qu'il vaut autant pour la méthode de diagnostic que
+pour le bug lui-même : **`00_BUG_BREVO_BLOCAGE_EMAILS.md`**. On y trouve les six fausses
+pistes écartées, les correctifs classés par urgence, et les commandes que le support peut
+utiliser pour vérifier ou lever un blocage.
 
 ---
 
