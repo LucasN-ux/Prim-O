@@ -44,7 +44,7 @@ Les trois plus graves :
 
 Le troisième ne se corrige pas en une ligne : les deux sites se construisent depuis le même
 dossier et un dossier ne peut porter qu'un seul `vercel.json`. La procédure, le piège et les
-trois issues possibles sont dans [`DEPLOIEMENT.md`](../DEPLOIEMENT.md), le choix appartient à
+trois issues possibles sont dans [`DEPLOIEMENT.md`](DEPLOIEMENT.md), le choix appartient à
 l'équipe.
 
 Restent ensuite six bugs graves, dont un paiement encaissé sans crédit et une entreprise qui

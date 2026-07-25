@@ -80,7 +80,7 @@ de toute façon être par compte.
 ### 2. Redéployer la vitrine la remplacerait par l'application
 
 **CERTAIN. ⚠️ TOUJOURS OUVERT, mais documenté.** La procédure et les trois issues possibles
-sont dans [`DEPLOIEMENT.md`](../DEPLOIEMENT.md). Ce cas ne se corrige pas en une ligne : les
+sont dans [`DEPLOIEMENT.md`](DEPLOIEMENT.md). Ce cas ne se corrige pas en une ligne : les
 deux sites se construisent depuis le même dossier et un dossier ne peut porter qu'un seul
 `vercel.json`. Le choix appartient à l'équipe.
 

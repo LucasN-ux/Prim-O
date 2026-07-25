@@ -19,7 +19,7 @@ Deux d'entre eux fabriquaient des tokens à partir de rien : cinq clics simultan
 même bouton transformaient une enveloppe de 100 en 500. Un autre les faisait disparaître,
 sans trace et sans moyen de les récupérer autrement qu'en les rachetant par carte.
 
-Un dernier point, honnête : **deux de ces dix correctifs réparent des bugs introduits
+Un dernier point, honnête : **deux de ces douze correctifs réparent des bugs introduits
 pendant cet audit**, l'un dans un correctif de la veille, l'autre dans une erreur de
 diagnostic. Ils sont signalés comme tels. Le fait qu'ils aient été trouvés vient d'une seule
 habitude : relire ses propres correctifs et les tester en contre-épreuve, c'est-à-dire
@@ -332,7 +332,7 @@ tableau de bord. Deux projets Vercel enracinés au même endroit sont donc conda
 partager la même configuration de build.
 
 La procédure, le piège et les trois issues possibles sont dans
-[`DEPLOIEMENT.md`](../DEPLOIEMENT.md), à la racine du dépôt. Le choix entre les trois
+[`DEPLOIEMENT.md`](DEPLOIEMENT.md). Le choix entre les trois
 appartient à l'équipe.
 
 En attendant, **la commande générique est à considérer comme dangereuse**. Le fichier
