@@ -148,10 +148,20 @@ export async function refundPendingEnvelopes(
   });
   if (pending.length === 0) return;
 
+  // Cancel first, refund only what the cancellation actually took. The read above is not a
+  // decision: the manager could be distributing an envelope right now, in which case it gets
+  // paid out AND refunded, which mints tokens. Whoever flips the status first wins, and the
+  // loser sees zero rows.
+  //
   // Grouped by company: a user belongs to a single company today, but summing per company
   // keeps this correct if that ever stops being true.
   const perCompany = new Map<string, number>();
   for (const envelope of pending) {
+    const cancelled = await tx.allocation.updateMany({
+      where: { id: envelope.id, status: 'A_DISTRIBUER' },
+      data: { status: 'ANNULEE' },
+    });
+    if (cancelled.count === 0) continue; // distributed in the meantime, nothing to give back
     perCompany.set(envelope.companyId, (perCompany.get(envelope.companyId) ?? 0) + envelope.amount);
   }
 
@@ -161,11 +171,6 @@ export async function refundPendingEnvelopes(
       data: { tokenBalance: { increment: amount } },
     });
   }
-
-  await tx.allocation.updateMany({
-    where: { id: { in: pending.map((envelope) => envelope.id) } },
-    data: { status: 'ANNULEE' },
-  });
 }
 
 // Atomic envelope distribution: recomputes R, checks the invariant Σ(line amounts) =
@@ -214,6 +219,16 @@ export async function distributeEnvelope(
     const validMotifs = await tx.motif.count({ where: { id: { in: motifIds }, active: true } });
     if (validMotifs !== motifIds.length) throw new Error('MOTIF_INVALID');
 
+    // Claim the envelope BEFORE crediting anyone. The status check above is a plain read, so
+    // two requests fired at once (a double click, a browser retry) both get past it and both
+    // credit, turning one envelope into two. The guard on status is what actually decides:
+    // the second transaction matches zero rows here and rolls everything back.
+    const claimed = await tx.allocation.updateMany({
+      where: { id: allocationId, status: 'A_DISTRIBUER' },
+      data: { status: 'DISTRIBUEE', retributionAmount: retribution, distributedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new Error('ALLOCATION_ALREADY_DISTRIBUTED');
+
     // Credit the retribution R to the manager's personal balance.
     if (retribution > 0) {
       await tx.user.update({ where: { id: managerId }, data: { balance: { increment: retribution } } });
@@ -232,11 +247,6 @@ export async function distributeEnvelope(
         },
       });
     }
-    await tx.allocation.update({
-      where: { id: allocationId },
-      data: { status: 'DISTRIBUEE', retributionAmount: retribution, distributedAt: new Date() },
-    });
-
     return { allocationId, retributionAmount: retribution, distributed: total, lineCount: lines.length, status: 'DISTRIBUEE' as const };
   });
 }
