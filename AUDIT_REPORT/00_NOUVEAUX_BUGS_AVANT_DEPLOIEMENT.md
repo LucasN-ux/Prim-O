@@ -202,11 +202,13 @@ sortant d'un conteneur qui vient de démarrer.
 **CERTAIN. Constaté en production, et le garde-fou a été posé depuis.**
 `backend/src/config.ts:7`
 
-Ce risque s'est réalisé pendant l'audit : `CLIENT_URL` n'était pas renseignée dans le
-tableau de bord Render, la réinitialisation de mot de passe était donc entièrement morte en
-production. Le cas complet a son propre document :
-**`00_BUG_CLIENT_URL_PRODUCTION.md`**. Le correctif de code décrit ci-dessous est
-désormais en place, il reste à renseigner la variable côté hébergeur.
+Ce risque s'est réalisé pendant l'audit : `API_URL` n'est pas renseignée dans le tableau de
+bord Render, donc le lien de vérification envoyé à chaque nouvel inscrit pointe vers
+`http://localhost:4000`, c'est-à-dire vers sa propre machine. **Personne ne peut valider son
+inscription en production.** Le cas complet a son propre document :
+**`00_BUG_URLS_PUBLIQUES_PRODUCTION.md`**, qui explique aussi pourquoi ce bug est invisible
+pour un développeur dont le backend local tourne. Le correctif de code décrit ci-dessous est
+en place, il reste à renseigner la variable côté hébergeur.
 
 `z.string().default(...)` a deux trous. Variable absente : le défaut `localhost` s'applique
 en silence. Variable **présente mais vide**, cas très réaliste avec une case laissée blanche
