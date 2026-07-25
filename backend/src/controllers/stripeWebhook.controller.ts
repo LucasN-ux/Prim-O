@@ -23,8 +23,12 @@ export async function stripeWebhookController(req: Request, res: Response): Prom
   if (event.type === 'checkout.session.completed') {
     try {
       await fulfillCheckout(event.data.object as CheckoutSession);
-    } catch {
-      // Responding 500 makes Stripe retry the event later.
+    } catch (err) {
+      console.error('Stripe fulfillment failed:', {
+        sessionId: event.data.object.id,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
       res.status(500).json({ error: 'fulfillment failed' });
       return;
     }

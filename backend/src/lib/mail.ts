@@ -18,24 +18,32 @@ export async function sendEmail({ to, subject, html }: SendEmailInput): Promise<
     return;
   }
 
-  const res = await fetch(BREVO_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'api-key': config.BREVO_API_KEY,
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({
-      sender: { email: config.BREVO_SENDER_EMAIL, name: config.BREVO_SENDER_NAME },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BREVO_SEND_FAILED: ${res.status} ${body}`);
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'api-key': config.BREVO_API_KEY,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { email: config.BREVO_SENDER_EMAIL, name: config.BREVO_SENDER_NAME },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`BREVO_SEND_FAILED: ${res.status} ${body}`);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

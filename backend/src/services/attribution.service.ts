@@ -73,6 +73,14 @@ export async function allocateToManager(
   mode: RetributionMode,
   percentage: number | null,
 ) {
+  const creator = await prisma.user.findUnique({
+    where: { id: createdById },
+    select: { id: true, role: true, companyId: true },
+  });
+  if (!creator || creator.role !== 'OWNER' || creator.companyId !== companyId) {
+    throw new Error('UNAUTHORIZED');
+  }
+
   const manager = await prisma.user.findUnique({
     where: { id: managerId },
     select: { id: true, role: true, companyId: true, deletedAt: true },
