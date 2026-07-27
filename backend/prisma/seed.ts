@@ -237,8 +237,9 @@ async function main() {
 
   console.log('✅ Seed terminé.')
   console.log('   Admin     : admin@primo.fr')
-  console.log('   Companies : Acme (pool 420), TestCo (pool 200)')
-  console.log('   Managers  : boss@acme.fr, test@testco.fr')
+  // Acme: 100 credited, 80 handed out to jean and marie, so 20 left in the pool.
+  console.log('   Companies : Acme (pool 20), TestCo (pool 100)')
+  console.log('   Owners    : boss@acme.fr, test@testco.fr')
   console.log('   Employees : jean.dupont@acme.fr (30), marie.martin@acme.fr (50)')
   console.log('   Offers    : Amazon (SHOPPING), Netflix (CULTURE)')
   console.log('   Codes     : AMAZON-SEED-001, AMAZON-SEED-002, NETFLIX-SEED-001')
