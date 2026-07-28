@@ -73,6 +73,14 @@ export async function allocateToManager(
   mode: RetributionMode,
   percentage: number | null,
 ) {
+  const creator = await prisma.user.findUnique({
+    where: { id: createdById },
+    select: { id: true, role: true, companyId: true },
+  });
+  if (!creator || creator.role !== 'OWNER' || creator.companyId !== companyId) {
+    throw new Error('UNAUTHORIZED');
+  }
+
   const manager = await prisma.user.findUnique({
     where: { id: managerId },
     select: { id: true, role: true, companyId: true, deletedAt: true },
@@ -115,6 +123,53 @@ export async function allocateToManager(
       throw new Error('INSUFFICIENT_POOL');
     }
     throw err;
+  }
+}
+
+// A manager can leave the company in four different ways: an admin deletes them, they delete
+// their own account, the employer removes them, or the inactivity job anonymizes them. Any of
+// those can happen while they still hold envelopes they never distributed. Those tokens left
+// the company pool back at allocation time, and only the owning manager may distribute an
+// envelope, so nobody can ever move them again: they are destroyed. The only other way to put
+// tokens back into a pool is to buy them again with a card.
+//
+// So we hand them back to the company and mark the envelopes ANNULEE, keeping the row for the
+// ledger rather than deleting it. The manager's personal balance is deliberately left alone:
+// what they earned dies with their account, it does not go back to the employer.
+//
+// Takes the caller's transaction so the refund cannot survive a failed deletion.
+export async function refundPendingEnvelopes(
+  tx: Prisma.TransactionClient,
+  managerId: string,
+): Promise<void> {
+  const pending = await tx.allocation.findMany({
+    where: { managerId, status: 'A_DISTRIBUER' },
+    select: { id: true, amount: true, companyId: true },
+  });
+  if (pending.length === 0) return;
+
+  // Cancel first, refund only what the cancellation actually took. The read above is not a
+  // decision: the manager could be distributing an envelope right now, in which case it gets
+  // paid out AND refunded, which mints tokens. Whoever flips the status first wins, and the
+  // loser sees zero rows.
+  //
+  // Grouped by company: a user belongs to a single company today, but summing per company
+  // keeps this correct if that ever stops being true.
+  const perCompany = new Map<string, number>();
+  for (const envelope of pending) {
+    const cancelled = await tx.allocation.updateMany({
+      where: { id: envelope.id, status: 'A_DISTRIBUER' },
+      data: { status: 'ANNULEE' },
+    });
+    if (cancelled.count === 0) continue; // distributed in the meantime, nothing to give back
+    perCompany.set(envelope.companyId, (perCompany.get(envelope.companyId) ?? 0) + envelope.amount);
+  }
+
+  for (const [companyId, amount] of perCompany) {
+    await tx.company.update({
+      where: { id: companyId },
+      data: { tokenBalance: { increment: amount } },
+    });
   }
 }
 
@@ -164,6 +219,16 @@ export async function distributeEnvelope(
     const validMotifs = await tx.motif.count({ where: { id: { in: motifIds }, active: true } });
     if (validMotifs !== motifIds.length) throw new Error('MOTIF_INVALID');
 
+    // Claim the envelope BEFORE crediting anyone. The status check above is a plain read, so
+    // two requests fired at once (a double click, a browser retry) both get past it and both
+    // credit, turning one envelope into two. The guard on status is what actually decides:
+    // the second transaction matches zero rows here and rolls everything back.
+    const claimed = await tx.allocation.updateMany({
+      where: { id: allocationId, status: 'A_DISTRIBUER' },
+      data: { status: 'DISTRIBUEE', retributionAmount: retribution, distributedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new Error('ALLOCATION_ALREADY_DISTRIBUTED');
+
     // Credit the retribution R to the manager's personal balance.
     if (retribution > 0) {
       await tx.user.update({ where: { id: managerId }, data: { balance: { increment: retribution } } });
@@ -182,11 +247,6 @@ export async function distributeEnvelope(
         },
       });
     }
-    await tx.allocation.update({
-      where: { id: allocationId },
-      data: { status: 'DISTRIBUEE', retributionAmount: retribution, distributedAt: new Date() },
-    });
-
     return { allocationId, retributionAmount: retribution, distributed: total, lineCount: lines.length, status: 'DISTRIBUEE' as const };
   });
 }

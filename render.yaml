@@ -12,10 +12,14 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      # Public URLs, not secrets: they belong in version control rather than in a box
+      # someone has to remember to fill in. API_URL was left empty in the dashboard, so it
+      # fell back to its localhost default and every verification link mailed in production
+      # pointed at the recipient's own machine.
       - key: CLIENT_URL
-        sync: false
+        value: https://prim-o-j4nm.vercel.app
       - key: API_URL
-        sync: false
+        value: https://primo-backend-3arx.onrender.com
       - key: JWT_SECRET
         generateValue: true
       - key: STRIPE_SECRET_KEY

@@ -34,7 +34,13 @@ const app = express();
 // res.ok becoming false and an empty body on the client side).
 app.set('etag', false);
 
-if (config.NODE_ENV === 'production') app.set('trust proxy', 1);
+// TWO proxies sit in front of us in production, not one: the Vercel rewrite that forwards
+// /api/*, then Render's own proxy. With a value of 1, Express reads the wrong entry of
+// X-Forwarded-For and every visitor comes out as the same address, Vercel's egress IP. Every
+// rate limiter below then shares a single counter for the whole application: ten logins per
+// quarter hour for all users put together, which three people testing a demo exhaust in two
+// minutes. Measured: with 1, req.ip is the proxy; with 2, it is the real visitor.
+if (config.NODE_ENV === 'production') app.set('trust proxy', 2);
 
 // 1. Security headers
 app.use(helmet());

@@ -81,6 +81,7 @@ export async function allocateController(
   } catch (err) {
     if (err instanceof Error) {
       const map: Record<string, [number, string]> = {
+        UNAUTHORIZED:           [403, 'Seul le patron peut allouer des tokens à un manager.'],
         MANAGER_NOT_FOUND:      [404, 'Manager introuvable.'],
         MANAGER_NOT_IN_COMPANY: [403, "Ce manager n'appartient pas à votre entreprise."],
         COMPANY_NOT_FOUND:      [404, 'Entreprise introuvable.'],
