@@ -75,7 +75,7 @@ export default function Layout({
           {!hideConsoleTopbar && (
             <Topbar title={title} subtitle={subtitle} actions={headerActions} />
           )}
-          <main className="w-full flex-1 pb-24 lg:overflow-y-auto lg:pb-0">{children}</main>
+          <main className="w-full flex-1 pb-24 lg:overflow-y-auto lg:pb-0"><h1 className="sr-only">Prim'O</h1>{children}</main>
           {/* Mobile (<lg): BottomNav, driven by the same nav object as the Sidebar. */}
           {nav && bottomNav}
         </div>
@@ -87,7 +87,7 @@ export default function Layout({
       <div className="flex min-h-[100dvh] flex-col">
         <Header title={title}>{headerActions}</Header>
         {/* Bottom padding keeps content clear of the fixed tab bar. */}
-        <main className="w-full flex-1 pb-24 lg:pb-0">{children}</main>
+        <main className="w-full flex-1 pb-24 lg:pb-0"><h1 className="sr-only">Prim'O</h1>{children}</main>
         {bottomNav}
       </div>
     );
@@ -97,7 +97,7 @@ export default function Layout({
   return (
     <div className="flex min-h-[100dvh] flex-col">
       {header ?? <Header title={title}>{headerActions}</Header>}
-      <main className={`w-full flex-1 ${bottomNav ? 'pb-24 lg:pb-0' : ''}`}>{children}</main>
+      <main className={`w-full flex-1 ${bottomNav ? 'pb-24 lg:pb-0' : ''}`}><h1 className="sr-only">Prim'O</h1>{children}</main>
       {bottomNav ? (
         <>
           <div className="lg:hidden">{bottomNav}</div>

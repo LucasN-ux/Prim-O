@@ -100,7 +100,7 @@ export default function LandingPage({
   );
 
   return (
-    <div className="min-h-screen bg-white text-primo-ink">
+    <main className="min-h-screen bg-white text-primo-ink">
       <nav className="sticky top-0 z-50 border-b border-primo-line bg-white/85 backdrop-blur-md">
         <div className="mx-auto flex h-[68px] max-w-[1140px] items-center justify-between px-5 sm:px-10">
           <button type="button" onClick={goHome} aria-label="Accueil">
@@ -369,6 +369,6 @@ export default function LandingPage({
           <div className="text-[13px] text-white/55">© {new Date().getFullYear()} Prim'O</div>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }

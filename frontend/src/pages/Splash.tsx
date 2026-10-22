@@ -11,7 +11,7 @@ type Props = {
 
 export default function Splash({ onLogin, onRegister }: Props) {
   return (
-    <div
+    <main
       className="flex min-h-[100dvh] flex-col bg-gradient-to-b from-primo-hero-from via-primo-ink-900 to-primo-ink-950 px-7 pb-12 pt-12 text-white"
       style={{ paddingBottom: 'max(3rem, env(safe-area-inset-bottom))' }}
     >
@@ -41,6 +41,6 @@ export default function Splash({ onLogin, onRegister }: Props) {
           J'ai déjà un compte
         </button>
       </div>
-    </div>
+    </main>
   );
 }

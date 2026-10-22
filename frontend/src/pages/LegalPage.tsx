@@ -201,7 +201,7 @@ function TermsOfService() {
 
 export default function LegalPage({ page, onBack }: LegalPageProps) {
   return (
-    <div className="min-h-screen bg-[#f4f5f7] px-4 py-8">
+    <main className="min-h-screen bg-[#f4f5f7] px-4 py-8">
       <div className="mx-auto max-w-[760px] rounded-xl border border-primo-border bg-white px-8 py-7">
         <button
           className="mb-[18px] inline-block cursor-pointer border-none bg-transparent p-0 text-sm font-semibold text-primo-teal hover:underline"
@@ -214,6 +214,6 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
         {page === 'mentions' && <LegalNotice />}
         {page === 'cgu' && <TermsOfService />}
       </div>
-    </div>
+    </main>
   );
 }

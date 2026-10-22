@@ -26,7 +26,8 @@ export default function AuthPage({ onLoginSuccess, initialMode = 'login', onBack
   };
 
   return (
-    <div className={WRAPPER}>
+    <main className={WRAPPER}>
+      <h1 className="sr-only">Connexion à Prim'O</h1>
       <div className={CARD}>
         {onBack && (
           <button type="button" className={BACK} onClick={onBack}>
@@ -46,6 +47,6 @@ export default function AuthPage({ onLoginSuccess, initialMode = 'login', onBack
           ? <LoginForm onLoginSuccess={onLoginSuccess} />
           : <RegisterForm onSuccess={handleRegisterSuccess} />}
       </div>
-    </div>
+    </main>
   );
 }
